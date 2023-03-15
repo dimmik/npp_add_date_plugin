@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using Kbg.NppPluginNET.PluginInfrastructure;
@@ -13,7 +10,6 @@ namespace Kbg.NppPluginNET
     {
         internal const string PluginName = "Npp Add Date";
         static string iniFilePath = null;
-        static bool someSetting = false;
 
         static bool DoInsertDate = true;
 
@@ -58,14 +54,14 @@ namespace Kbg.NppPluginNET
             iniFilePath = sbIniFilePath.ToString();
             if (!Directory.Exists(iniFilePath)) Directory.CreateDirectory(iniFilePath);
             iniFilePath = Path.Combine(iniFilePath, PluginName + ".ini");
-            someSetting = (Win32.GetPrivateProfileInt("SomeSection", "SomeKey", 0, iniFilePath) != 0);
+            //someSetting = (Win32.GetPrivateProfileInt("SomeSection", "SomeKey", 0, iniFilePath) != 0);
 
             PluginBase.SetCommand(0, "Info", ShowInfo, new ShortcutKey(false, false, false, Keys.None));
         }
 
         internal static void PluginCleanUp()
         {
-            Win32.WritePrivateProfileString("SomeSection", "SomeKey", someSetting ? "1" : "0", iniFilePath);
+            //Win32.WritePrivateProfileString("SomeSection", "SomeKey", someSetting ? "1" : "0", iniFilePath);
         }
 
         internal static void ShowInfo()
