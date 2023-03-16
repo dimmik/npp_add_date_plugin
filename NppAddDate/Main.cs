@@ -16,10 +16,11 @@ namespace Kbg.NppPluginNET
         static string DatetimeFmt = "yyyy.MM.dd HH:mm:ss";
         static string ApplicableExtension = ".wlog";
         static char ToggleAddDateChar = '~';
-        static char AddDateKey = (char)10; // LF
-
+        static char AddDateKey = '\n'; // LF
+        static bool Enabled = true;
         public static void OnNotification(ScNotification notification)
-        {  
+        {
+            if (!Enabled) return;
             if (notification.Header.Code == (uint)SciMsg.SCI_ADDTEXT)
             {
                 if (notification.Mmodifiers == ToggleAddDateChar) // toggle adding the date 
@@ -80,11 +81,12 @@ namespace Kbg.NppPluginNET
         internal static void ShowInfoAndReloadConfig()
         {
             ReadConfig();
-            MessageBox.Show($@"On each newline (LF) in files with extension {ApplicableExtension} adds a date in format {DatetimeFmt} at the line start
-Tilda ('~') toggles adding date.
+            MessageBox.Show($@"On each newline ({(AddDateKey == '\r' ? "CR" : "LF")}) in files with extension {ApplicableExtension} adds a date in format {DatetimeFmt} at the line start
+Char {ToggleAddDateChar} ('{ToggleAddDateChar}') toggles adding date.
 On startup 'add date' is enabled
 Config file: '{Path.GetFullPath(iniFilePath)}'
 Is Date currently being added? {DoInsertDate}
+Is currently enabled? {Enabled}
 ");
         }
 
@@ -93,35 +95,63 @@ Is Date currently being added? {DoInsertDate}
             try
             {
                 var iniContent = File.ReadAllLines(iniFilePath);
-                var extLine = iniContent.Where(l => l.Trim().StartsWith("ApplicableExtension=")).FirstOrDefault();
-                if (extLine != null)
+                var ext = ConfigValue(iniContent, "ApplicableExtension");
+                if (!string.IsNullOrWhiteSpace(ext))
                 {
-                    var ext = extLine.Trim().Substring("ApplicableExtension=".Length).Trim();
-                    if (!string.IsNullOrWhiteSpace(ext))
+                    ApplicableExtension = ext.Trim();
+                }
+                var fmt = ConfigValue(iniContent, "DateTimeFmt");
+                if (!string.IsNullOrWhiteSpace(fmt))
+                {
+                    try
                     {
-                        ApplicableExtension= ext;
+                        var formatted = DateTime.Now.ToString(fmt); // if it is successful
+                        DatetimeFmt = fmt;
+                    }
+                    catch
+                    {
+                        // nothing
                     }
                 }
-                var fmtLine = iniContent.Where(l => l.Trim().StartsWith("DateTimeFmt=")).FirstOrDefault();
-                if (fmtLine != null)
+                var toggleC = ConfigValue(iniContent, "ToggleAddDateChar");
+                if (!string.IsNullOrWhiteSpace(toggleC))
                 {
-                    var fmt = fmtLine.Trim().Substring("DateTimeFmt=".Length).TrimStart();
-                    if (!string.IsNullOrWhiteSpace(fmt))
+                    var chars = toggleC.Trim().ToCharArray();
+                    ToggleAddDateChar = chars[0];
+                }
+                var enabledS = ConfigValue(iniContent, "Enabled");
+                if (!string.IsNullOrWhiteSpace(enabledS))
+                {
+                    var trimmedAndLower = enabledS.Trim().ToLower();
+                    Enabled = "true" == trimmedAndLower || "1" == trimmedAndLower;
+                }
+                var AddDateKeyS = ConfigValue(iniContent, "AddDateKey");
+                if (!string.IsNullOrWhiteSpace(AddDateKeyS))
+                {
+                    AddDateKeyS = AddDateKeyS.Trim().Replace("\\r", "\r").Replace("\\n", "\n");
+                    var chars = AddDateKeyS.ToCharArray().Where(c => c == '\r' || c == '\n');
+                    if (chars.Any())
                     {
-                        try
-                        {
-                            var formatted = DateTime.Now.ToString(fmt); // if it is successful
-                            DatetimeFmt = fmt;
-                        } catch
-                        {
-                            // nothing
-                        }
+                        AddDateKey = chars.First();
                     }
                 }
             } catch
             {
                 // nothing
             }
+        }
+        static string ConfigValue(string[] lines, string key)
+        {
+            var vLine = lines.Where(l => l.Trim().StartsWith($"{key}=")).FirstOrDefault();
+            if (vLine != null)
+            {
+                var val = vLine.Trim().Substring($"{key}=".Length).TrimStart();
+                if (!string.IsNullOrWhiteSpace(val))
+                {
+                    return val;
+                }
+            }
+            return null;
         }
 
     }
