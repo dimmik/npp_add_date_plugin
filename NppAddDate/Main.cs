@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Kbg.NppPluginNET.PluginInfrastructure;
 
@@ -11,6 +12,7 @@ namespace Kbg.NppPluginNET
     {
         internal const string PluginName = "Npp Add Date";
         static string iniFilePath = null;
+        static string stateFilePath => $"{iniFilePath}.state";
 
         static bool DoInsertDate = true;
         static string DatetimeFmt = "yyyy.MM.dd HH:mm:ss";
@@ -18,6 +20,7 @@ namespace Kbg.NppPluginNET
         static char ToggleAddDateChar = '~';
         static char AddDateKey = '\n'; // LF
         static bool Enabled = true;
+        static DateTime prevDate;
         public static void OnNotification(ScNotification notification)
         {
             if (!Enabled) return;
@@ -37,15 +40,23 @@ namespace Kbg.NppPluginNET
                         {
                             var scih = PluginBase.GetCurrentScintilla();
                             ScintillaGateway sci = new ScintillaGateway(scih);
+                            var nowD = DateTime.Now;
                             string now;
                             try
                             {
-                                now = DateTime.Now.ToString(DatetimeFmt) + " ";
+                                now = nowD.ToString(DatetimeFmt) + " ";
                             } catch
                             {
-                                now = DateTime.Now.ToString() + " ";
+                                now = nowD.ToString() + " ";
+                            }
+                            if (nowD.ToString("yyyy.MM.dd") != prevDate.ToString("yyyy.MM.dd")) // another day
+                            {
+                                var txt = $"{Environment.NewLine}--- {nowD:yyyy.MM.dd} ---{Environment.NewLine}";
+                                sci.AddText(txt.Length, txt);
                             }
                             sci.AddText(now.Length, now);
+                            prevDate = nowD;
+                            Task.Run(WriteState); // background
                         }
                     }
                 }
@@ -94,6 +105,7 @@ Is currently enabled? {Enabled}
         {
             try
             {
+                ReadState();
                 var iniContent = File.ReadAllLines(iniFilePath);
                 var ext = ConfigValue(iniContent, "ApplicableExtension");
                 if (!string.IsNullOrWhiteSpace(ext))
@@ -135,11 +147,29 @@ Is currently enabled? {Enabled}
                         AddDateKey = chars.First();
                     }
                 }
-            } catch
+            }
+            catch
             {
                 // nothing
             }
         }
+
+        private static void ReadState()
+        {
+            try
+            {
+                var stateContent = File.ReadAllText(stateFilePath);
+                var success = DateTime.TryParse(stateContent, out prevDate);
+            }
+            catch // no luck
+            {
+            }
+        }
+        private static void WriteState()
+        {
+            File.WriteAllText(stateFilePath, $"{prevDate}");
+        }
+
         static string ConfigValue(string[] lines, string key)
         {
             var vLine = lines.Where(l => l.Trim().StartsWith($"{key}=")).FirstOrDefault();
