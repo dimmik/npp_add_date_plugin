@@ -16,6 +16,8 @@ namespace Kbg.NppPluginNET
 
         static bool DoInsertDate = true;
         static string DatetimeFmt = "yyyy.MM.dd HH:mm:ss";
+        static string DateTimeDelimiterFmt = "--- yyyy.MM.dd ---";
+        static bool AddDateTimeDelimiter = true;
         static string ApplicableExtension = ".wlog";
         static char ToggleAddDateChar = '~';
         static char AddDateKey = '\n'; // LF
@@ -49,9 +51,9 @@ namespace Kbg.NppPluginNET
                             {
                                 now = nowD.ToString() + " ";
                             }
-                            if (nowD.ToString("yyyy.MM.dd") != prevDate.ToString("yyyy.MM.dd")) // another day
+                            if (AddDateTimeDelimiter && nowD.ToString("yyyy.MM.dd") != prevDate.ToString("yyyy.MM.dd")) // another day
                             {
-                                var txt = $"{Environment.NewLine}--- {nowD:yyyy.MM.dd} ---{Environment.NewLine}";
+                                var txt = $"{Environment.NewLine}{nowD.ToString(DateTimeDelimiterFmt)}{Environment.NewLine}";
                                 sci.AddText(txt.Length, txt);
                             }
                             sci.AddText(now.Length, now);
@@ -147,6 +149,25 @@ Is currently enabled? {Enabled}
                         AddDateKey = chars.First();
                     }
                 }
+                var addDatetimeDelimeter = ConfigValue(iniContent, "AddDatetimeDelimiter");
+                if (!string.IsNullOrWhiteSpace(addDatetimeDelimeter))
+                {
+                    var trimmedAndLower = addDatetimeDelimeter.Trim().ToLower();
+                    AddDateTimeDelimiter = "true" == trimmedAndLower || "1" == trimmedAndLower;
+                }
+                fmt = ConfigValue(iniContent, "DateTimeDelimiterFmt");
+                if (!string.IsNullOrWhiteSpace(fmt))
+                {
+                    try
+                    {
+                        var formatted = DateTime.Now.ToString(fmt); // if it is successful
+                        DateTimeDelimiterFmt = fmt;
+                    }
+                    catch
+                    {
+                        // nothing
+                    }
+                }
             }
             catch
             {
@@ -172,7 +193,7 @@ Is currently enabled? {Enabled}
 
         static string ConfigValue(string[] lines, string key)
         {
-            var vLine = lines.Where(l => l.Trim().StartsWith($"{key}=")).FirstOrDefault();
+            var vLine = lines.Where(l => l.Trim().ToLower().StartsWith($"{key.ToLower()}=")).FirstOrDefault();
             if (vLine != null)
             {
                 var val = vLine.Trim().Substring($"{key}=".Length).TrimStart();
