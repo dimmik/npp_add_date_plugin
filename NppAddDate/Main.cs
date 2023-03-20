@@ -84,6 +84,14 @@ namespace Kbg.NppPluginNET
             ReadConfig();
 
             PluginBase.SetCommand(0, "Info and Reload Config", ShowInfoAndReloadConfig, new ShortcutKey(false, false, false, Keys.None));
+            PluginBase.SetCommand(0, "Edit Config", EditConfig, new ShortcutKey(false, false, false, Keys.None));
+        }
+
+        private static void EditConfig()
+        {
+            var npp = new NotepadPPGateway();
+            //NppMsg.NPPM_DOOPEN
+            Win32.SendMessage(PluginBase.nppData._nppHandle, (uint)NppMsg.NPPM_DOOPEN, 0, iniFilePath);
         }
 
         internal static void PluginCleanUp()
@@ -93,17 +101,17 @@ namespace Kbg.NppPluginNET
 
         internal static void ShowInfoAndReloadConfig()
         {
-            ReadConfig();
+            var config = ReadConfig();
             MessageBox.Show($@"On each newline ({(AddDateKey == '\r' ? "CR" : "LF")}) in files with extension {ApplicableExtension} adds a date in format {DatetimeFmt} at the line start
 Char {ToggleAddDateChar} ('{ToggleAddDateChar}') toggles adding date.
 On startup 'add date' is enabled
 Config file: '{Path.GetFullPath(iniFilePath)}'
-Is Date currently being added? {DoInsertDate}
-Is currently enabled? {Enabled}
+Config:
+{string.Join(Environment.NewLine, config)}
 ");
         }
 
-        static void ReadConfig()
+        static string[] ReadConfig()
         {
             try
             {
@@ -168,11 +176,13 @@ Is currently enabled? {Enabled}
                         // nothing
                     }
                 }
+                return iniContent;
             }
             catch
             {
                 // nothing
             }
+            return new string[0];
         }
 
         private static void ReadState()
