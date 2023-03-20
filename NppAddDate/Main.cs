@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -22,23 +23,25 @@ namespace Kbg.NppPluginNET
         static char ToggleAddDateChar = '~';
         static char AddDateKey = '\n'; // LF
         static bool Enabled = true;
-        static DateTime prevDate;
+        //static DateTime prevDate;
+        static Dictionary<string, DateTime> prevDates = new Dictionary<string, DateTime>();
         public static void OnNotification(ScNotification notification)
         {
             if (!Enabled) return;
-            if (notification.Header.Code == (uint)SciMsg.SCI_ADDTEXT)
+            var npp = new NotepadPPGateway();
+            var path = npp.GetCurrentFilePath();
+            if (path.EndsWith(ApplicableExtension))
             {
-                if (notification.Mmodifiers == ToggleAddDateChar) // toggle adding the date 
+                if (!prevDates.ContainsKey(path)) prevDates[path] = DateTime.Now;
+                if (notification.Header.Code == (uint)SciMsg.SCI_ADDTEXT)
                 {
-                    DoInsertDate = !DoInsertDate;
-                } 
-                if (notification.Mmodifiers == AddDateKey) 
-                {
-                    if (DoInsertDate)
+                    if (notification.Mmodifiers == ToggleAddDateChar) // toggle adding the date 
                     {
-                        var npp = new NotepadPPGateway();
-                        var path = npp.GetCurrentFilePath();
-                        if (path.EndsWith(ApplicableExtension))
+                        DoInsertDate = !DoInsertDate;
+                    }
+                    if (notification.Mmodifiers == AddDateKey)
+                    {
+                        if (DoInsertDate)
                         {
                             var scih = PluginBase.GetCurrentScintilla();
                             ScintillaGateway sci = new ScintillaGateway(scih);
@@ -51,13 +54,13 @@ namespace Kbg.NppPluginNET
                             {
                                 now = nowD.ToString() + " ";
                             }
-                            if (AddDateTimeDelimiter && nowD.ToString("yyyy.MM.dd") != prevDate.ToString("yyyy.MM.dd")) // another day
+                            if (AddDateTimeDelimiter && nowD.ToString("yyyy.MM.dd") != prevDates[path].ToString("yyyy.MM.dd")) // another day
                             {
                                 var txt = $"{Environment.NewLine}{nowD.ToString(DateTimeDelimiterFmt)}{Environment.NewLine}";
                                 sci.AddText(txt.Length, txt);
                             }
                             sci.AddText(now.Length, now);
-                            prevDate = nowD;
+                            prevDates[path] = nowD;
                             Task.Run(WriteState); // background
                         }
                     }
@@ -89,8 +92,6 @@ namespace Kbg.NppPluginNET
 
         private static void EditConfig()
         {
-            var npp = new NotepadPPGateway();
-            //NppMsg.NPPM_DOOPEN
             Win32.SendMessage(PluginBase.nppData._nppHandle, (uint)NppMsg.NPPM_DOOPEN, 0, iniFilePath);
         }
 
@@ -185,12 +186,25 @@ Config:
             return new string[0];
         }
 
+        private const char delim = '*';
         private static void ReadState()
         {
             try
             {
-                var stateContent = File.ReadAllText(stateFilePath);
-                var success = DateTime.TryParse(stateContent, out prevDate);
+                Dictionary<string, DateTime> pd = new Dictionary<string, DateTime>();
+                var lines = File.ReadAllLines(stateFilePath);
+                foreach (var l in lines)
+                {
+                    var split = l.Split(delim);
+                    if (split.Length > 1)
+                    {
+                        pd[split[0]] = DateTime.Parse(split[1]);
+                    }
+                }
+                if (pd.Any())
+                {
+                    prevDates = pd;
+                }
             }
             catch // no luck
             {
@@ -198,7 +212,18 @@ Config:
         }
         private static void WriteState()
         {
-            File.WriteAllText(stateFilePath, $"{prevDate}");
+            try
+            {
+                List<string> lines = new List<string>();
+                foreach (var kv in prevDates)
+                {
+                    lines.Add($"{kv.Key}{delim}{kv.Value}");
+                }
+                File.WriteAllLines(stateFilePath, lines);
+            } catch
+            {
+                // nothing
+            }
         }
 
         static string ConfigValue(string[] lines, string key)
