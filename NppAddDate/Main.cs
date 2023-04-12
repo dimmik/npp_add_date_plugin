@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Timers;
 using System.Windows.Forms;
 using Kbg.NppPluginNET.PluginInfrastructure;
 
@@ -16,6 +18,7 @@ namespace Kbg.NppPluginNET
         static string stateFilePath => $"{iniFilePath}.state";
 
         static bool DoInsertDate = true;
+        static bool IsDelayActive = false;
         static string DatetimeFmt = "yyyy.MM.dd HH:mm:ss";
         static string DateTimeDelimiterFmt = "--- yyyy.MM.dd ---";
         static bool AddDateTimeDelimiter = true;
@@ -23,6 +26,8 @@ namespace Kbg.NppPluginNET
         static char ToggleAddDateChar = '~';
         static char AddDateKey = '\n'; // LF
         static bool Enabled = true;
+        static bool DelayAddDateOnInactivity = true;
+        static int InactivityDelayInMs = 8 * 60 * 1000; // 8 min default
         //static DateTime prevDate;
         static Dictionary<string, DateTime> prevDates = new Dictionary<string, DateTime>();
         public static void OnNotification(ScNotification notification)
@@ -35,6 +40,7 @@ namespace Kbg.NppPluginNET
                 if (!prevDates.ContainsKey(path)) prevDates[path] = DateTime.Now;
                 if (notification.Header.Code == (uint)SciMsg.SCI_ADDTEXT)
                 {
+                    CheckInactivity();
                     if (notification.Mmodifiers == ToggleAddDateChar) // toggle adding the date 
                     {
                         DoInsertDate = !DoInsertDate;
@@ -59,9 +65,21 @@ namespace Kbg.NppPluginNET
                                 var txt = $"{Environment.NewLine}{nowD.ToString(DateTimeDelimiterFmt)}{Environment.NewLine}";
                                 sci.AddText(txt.Length, txt);
                             }
-                            sci.AddText(now.Length, now);
+                            lock (idLock)
+                            {
+                                if (!IsDelayActive || !DelayAddDateOnInactivity) // add only if delay is not active
+                                {
+                                    sci.AddText(now.Length, now);
+                                    if (DelayAddDateOnInactivity) // set delay
+                                    {
+                                        TurnOnInactivityDelay();
+                                        CheckInactivity();
+                                    }
+                                }
+                            }
                             prevDates[path] = nowD;
                             Task.Run(WriteState); // background
+
                         }
                     }
                 }
@@ -74,6 +92,36 @@ namespace Kbg.NppPluginNET
             //
             // if (notification.Header.Code == (uint)SciMsg.SCNxxx)
             // { ... }
+        }
+        private static System.Timers.Timer InactivityTimer = null;
+        private static void CheckInactivity()
+        {
+            lock (idLock)
+            {
+                if (DelayAddDateOnInactivity && IsDelayActive)
+                {
+                    InactivityTimer?.Stop(); // stop any existing timer
+                    InactivityTimer = new System.Timers.Timer(InactivityDelayInMs);
+                    InactivityTimer.Elapsed += OnElapsed;
+                    InactivityTimer.AutoReset = false;
+                    InactivityTimer.Start();
+                }
+            }
+        }
+        private static object idLock = new object();
+        private static void OnElapsed(object source, ElapsedEventArgs e)
+        {
+            lock (idLock)
+            {
+                IsDelayActive = false;
+            }
+        }
+        private static void TurnOnInactivityDelay()
+        {
+            lock (idLock)
+            {
+                IsDelayActive = true;
+            }
         }
 
         internal static void CommandMenuInit()
@@ -175,6 +223,21 @@ Config:
                     catch
                     {
                         // nothing
+                    }
+                }
+                var delayAddDateOnInactivity = ConfigValue(iniContent, "DelayAddDateOnInactivity");
+                if (!string.IsNullOrWhiteSpace(delayAddDateOnInactivity))
+                {
+                    var trimmedAndLower = delayAddDateOnInactivity.Trim().ToLower();
+                    DelayAddDateOnInactivity = "true" == trimmedAndLower || "1" == trimmedAndLower;
+                }
+                var inactivityDelayInMs = ConfigValue(iniContent, "InactivityDelayInMs");
+                int delayInMs = -1;
+                if (int.TryParse(inactivityDelayInMs, out delayInMs))
+                {
+                    if (delayInMs > 0)
+                    {
+                        InactivityDelayInMs = delayInMs;
                     }
                 }
                 return iniContent;
