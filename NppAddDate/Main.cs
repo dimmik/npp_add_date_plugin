@@ -74,8 +74,8 @@ namespace Kbg.NppPluginNET
                             if (addText)
                             {
                                 sci.AddText(now.Length, now);
-                                datetimeInsertedPerFile[path] = nowD;
                             }
+                            datetimeInsertedPerFile[path] = nowD;
                             prevDates[path] = nowD;
                             Task.Run(WriteState); // background
 
