@@ -17,16 +17,16 @@ namespace Kbg.NppPluginNET
         static string iniFilePath = null;
         static string stateFilePath => $"{iniFilePath}.state";
 
-        static bool DoInsertDate = true;
+        static bool AddDateToggledOn = true;
         static string DatetimeFmt = "yyyy.MM.dd HH:mm:ss";
-        static string DateTimeDelimiterFmt = "--- yyyy.MM.dd ---";
-        static bool AddDateTimeDelimiter = true;
+        static string DateDelimiterFmt = "--- yyyy.MM.dd ---";
+        static bool AddDateDelimiter = true;
         static string ApplicableExtension = ".wlog";
         static char ToggleAddDateChar = '~';
         static char AddDateKey = '\n'; // LF
         static bool Enabled = true;
-        static bool DelayAddDateOnInactivity = true;
-        static int InactivityDelayInMs = 8 * 60 * 1000; // 8 min default
+        static bool DelayAddingDatetimeSecondTime = true;
+        static int DelayAddingDatetimeSecondTimeMs = 8 * 60 * 1000; // 8 min default
         //static DateTime prevDate;
         static Dictionary<string, DateTime> prevDates = new Dictionary<string, DateTime>();
         static readonly Dictionary<string, DateTime> datetimeInsertedPerFile = new Dictionary<string, DateTime>();
@@ -42,11 +42,11 @@ namespace Kbg.NppPluginNET
                 {
                     if (notification.Mmodifiers == ToggleAddDateChar) // toggle adding the date 
                     {
-                        DoInsertDate = !DoInsertDate;
+                        AddDateToggledOn = !AddDateToggledOn;
                     }
                     if (notification.Mmodifiers == AddDateKey)
                     {
-                        if (DoInsertDate)
+                        if (AddDateToggledOn)
                         {
                             var scih = PluginBase.GetCurrentScintilla();
                             ScintillaGateway sci = new ScintillaGateway(scih);
@@ -59,17 +59,17 @@ namespace Kbg.NppPluginNET
                             {
                                 now = nowD.ToString() + " ";
                             }
-                            if (AddDateTimeDelimiter && nowD.ToString("yyyy.MM.dd") != prevDates[path].ToString("yyyy.MM.dd")) // another day
+                            if (AddDateDelimiter && nowD.ToString("yyyy.MM.dd") != prevDates[path].ToString("yyyy.MM.dd")) // another day
                             {
-                                var txt = $"{Environment.NewLine}{nowD.ToString(DateTimeDelimiterFmt)}{Environment.NewLine}";
+                                var txt = $"{Environment.NewLine}{nowD.ToString(DateDelimiterFmt)}{Environment.NewLine}";
                                 sci.AddText(txt.Length, txt);
                             }
                             bool addText = true;
                             if (!datetimeInsertedPerFile.ContainsKey(path)) datetimeInsertedPerFile[path] = DateTime.MinValue;
-                            if (DelayAddDateOnInactivity)
+                            if (DelayAddingDatetimeSecondTime)
                             {
                                 var msecsSinceLastDatetimeInserted = (nowD - datetimeInsertedPerFile[path]).TotalMilliseconds;
-                                addText = msecsSinceLastDatetimeInserted > InactivityDelayInMs;
+                                addText = msecsSinceLastDatetimeInserted > DelayAddingDatetimeSecondTimeMs;
                             }
                             if (addText)
                             {
@@ -175,38 +175,38 @@ Config:
                         AddDateKey = chars.First();
                     }
                 }
-                var addDatetimeDelimeter = ConfigValue(iniContent, "AddDatetimeDelimiter");
+                var addDatetimeDelimeter = ConfigValue(iniContent, "AddDateDelimiter");
                 if (!string.IsNullOrWhiteSpace(addDatetimeDelimeter))
                 {
                     var trimmedAndLower = addDatetimeDelimeter.Trim().ToLower();
-                    AddDateTimeDelimiter = "true" == trimmedAndLower || "1" == trimmedAndLower;
+                    AddDateDelimiter = "true" == trimmedAndLower || "1" == trimmedAndLower;
                 }
-                fmt = ConfigValue(iniContent, "DateTimeDelimiterFmt");
+                fmt = ConfigValue(iniContent, "DateDelimiterFmt");
                 if (!string.IsNullOrWhiteSpace(fmt))
                 {
                     try
                     {
                         var formatted = DateTime.Now.ToString(fmt); // if it is successful
-                        DateTimeDelimiterFmt = fmt;
+                        DateDelimiterFmt = fmt;
                     }
                     catch
                     {
                         // nothing
                     }
                 }
-                var delayAddDateOnInactivity = ConfigValue(iniContent, "DelayAddDateOnInactivity");
-                if (!string.IsNullOrWhiteSpace(delayAddDateOnInactivity))
+                var delayAddingDatetimeSecondTime = ConfigValue(iniContent, "DelayAddingDatetimeSecondTime");
+                if (!string.IsNullOrWhiteSpace(delayAddingDatetimeSecondTime))
                 {
-                    var trimmedAndLower = delayAddDateOnInactivity.Trim().ToLower();
-                    DelayAddDateOnInactivity = "true" == trimmedAndLower || "1" == trimmedAndLower;
+                    var trimmedAndLower = delayAddingDatetimeSecondTime.Trim().ToLower();
+                    DelayAddingDatetimeSecondTime = "true" == trimmedAndLower || "1" == trimmedAndLower;
                 }
-                var inactivityDelayInMs = ConfigValue(iniContent, "InactivityDelayInMs");
+                var delayAddingDatetimeSecondTimeMs = ConfigValue(iniContent, "DelayAddingDatetimeSecondTimeMs");
                 int delayInMs = -1;
-                if (int.TryParse(inactivityDelayInMs, out delayInMs))
+                if (int.TryParse(delayAddingDatetimeSecondTimeMs, out delayInMs))
                 {
                     if (delayInMs > 0)
                     {
-                        InactivityDelayInMs = delayInMs;
+                        DelayAddingDatetimeSecondTimeMs = delayInMs;
                     }
                 }
                 return iniContent;
