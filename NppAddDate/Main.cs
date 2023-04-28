@@ -40,46 +40,56 @@ namespace Kbg.NppPluginNET
                 if (!prevDates.ContainsKey(path)) prevDates[path] = DateTime.Now;
                 if (notification.Header.Code == (uint)SciMsg.SCI_ADDTEXT)
                 {
-                    if (notification.Mmodifiers == ToggleAddDateChar) // toggle adding the date 
+                    char theChar = (char)notification.Mmodifiers;
+                    var nowD = DateTime.Now;
+                    if (theChar == ToggleAddDateChar) // toggle adding the date 
                     {
                         AddDateToggledOn = !AddDateToggledOn;
                     }
-                    if (notification.Mmodifiers == AddDateKey)
+                    if (theChar == AddDateKey)
                     {
-                        if (AddDateToggledOn)
+                        if (!datetimeInsertedPerFile.ContainsKey(path)) datetimeInsertedPerFile[path] = DateTime.MinValue;
+
+
+                        var scih = PluginBase.GetCurrentScintilla();
+                        ScintillaGateway sci = new ScintillaGateway(scih);
+
+                        if (AddDateDelimiter && nowD.ToString("yyyy.MM.dd") != prevDates[path].ToString("yyyy.MM.dd")) // another day
                         {
-                            var scih = PluginBase.GetCurrentScintilla();
-                            ScintillaGateway sci = new ScintillaGateway(scih);
-                            var nowD = DateTime.Now;
+                            var txt = $"{Environment.NewLine}{nowD.ToString(DateDelimiterFmt)}{Environment.NewLine}";
+                            sci.AddText(txt.Length, txt);
+                        }
+
+                        bool addText = true;
+                        if (DelayAddingDatetimeSecondTime || !AddDateToggledOn)
+                        {
+                            var msecsSinceLastDatetimeInserted = (nowD - datetimeInsertedPerFile[path]).TotalMilliseconds;
+                            bool enoughTimePassed = msecsSinceLastDatetimeInserted > DelayAddingDatetimeSecondTimeMs;
+                            addText = enoughTimePassed;
+                        }
+                        prevDates[path] = nowD;
+                        Task.Run(WriteState); // background
+
+                        if (addText)
+                        {
+
                             string now;
                             try
                             {
                                 now = nowD.ToString(DatetimeFmt) + " ";
-                            } catch
+                            }
+                            catch
                             {
                                 now = nowD.ToString() + " ";
                             }
-                            if (AddDateDelimiter && nowD.ToString("yyyy.MM.dd") != prevDates[path].ToString("yyyy.MM.dd")) // another day
-                            {
-                                var txt = $"{Environment.NewLine}{nowD.ToString(DateDelimiterFmt)}{Environment.NewLine}";
-                                sci.AddText(txt.Length, txt);
-                            }
-                            bool addText = true;
-                            if (!datetimeInsertedPerFile.ContainsKey(path)) datetimeInsertedPerFile[path] = DateTime.MinValue;
-                            if (DelayAddingDatetimeSecondTime)
-                            {
-                                var msecsSinceLastDatetimeInserted = (nowD - datetimeInsertedPerFile[path]).TotalMilliseconds;
-                                addText = msecsSinceLastDatetimeInserted > DelayAddingDatetimeSecondTimeMs;
-                            }
-                            if (addText)
-                            {
-                                sci.AddText(now.Length, now);
-                            }
-                            datetimeInsertedPerFile[path] = nowD;
-                            prevDates[path] = nowD;
-                            Task.Run(WriteState); // background
-
+                            AddDateToggledOn = true;
+                            sci.AddText(now.Length, now);
                         }
+                    }
+                    bool isControl = char.IsControl(theChar);
+                    if (!isControl)
+                    {
+                        datetimeInsertedPerFile[path] = nowD;
                     }
                 }
             }
