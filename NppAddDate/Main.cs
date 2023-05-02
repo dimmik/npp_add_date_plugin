@@ -27,6 +27,8 @@ namespace Kbg.NppPluginNET
         static bool Enabled = true;
         static bool DelayAddingDatetimeSecondTime = true;
         static int DelayAddingDatetimeSecondTimeMs = 8 * 60 * 1000; // 8 min default
+
+        static bool DoubleEnterTogglesDatetime = true;
         //static DateTime prevDate;
         static Dictionary<string, DateTime> prevDates = new Dictionary<string, DateTime>();
         static readonly Dictionary<string, DateTime> datetimeInsertedPerFile = new Dictionary<string, DateTime>();
@@ -42,7 +44,7 @@ namespace Kbg.NppPluginNET
                 {
                     char theChar = (char)notification.Mmodifiers;
                     var nowD = DateTime.Now;
-                    if (theChar == ToggleAddDateChar) // toggle adding the date 
+                    if (DoToggle(theChar)) // toggle adding the date 
                     {
                         AddDateToggledOn = !AddDateToggledOn;
                     }
@@ -87,7 +89,7 @@ namespace Kbg.NppPluginNET
                         }
                     }
                     bool isControl = char.IsControl(theChar);
-                    if (!isControl)
+                    if (!isControl || (theChar == AddDateKey))
                     {
                         datetimeInsertedPerFile[path] = nowD;
                     }
@@ -101,6 +103,42 @@ namespace Kbg.NppPluginNET
             //
             // if (notification.Header.Code == (uint)SciMsg.SCNxxx)
             // { ... }
+        }
+        internal static DateTime? AddDateTimeKeyPressed = null;
+        internal static bool DoToggle(char c)
+        {
+            bool t = c == ToggleAddDateChar;
+            if (t) return t;
+            if (!DoubleEnterTogglesDatetime) return t;
+
+            if (c == AddDateKey) // fast double enter - disable add date
+            {
+                DateTime now = DateTime.Now;
+                if (AddDateTimeKeyPressed == null)
+                {
+                    AddDateTimeKeyPressed = now;
+                    return false;
+                } else
+                {
+                    var diff = now - AddDateTimeKeyPressed;
+                    AddDateTimeKeyPressed = now;
+                    if (diff < TimeSpan.FromMilliseconds(500))
+                    {
+                        AddDateTimeKeyPressed = null; // start again
+                        return true;
+                    } else
+                    {
+                        return false;
+                    }
+                }
+            } else
+            {
+                if (!char.IsControl(c))
+                {
+                    AddDateTimeKeyPressed = null; // start again
+                }
+            }
+            return false;
         }
 
         internal static void CommandMenuInit()
@@ -218,6 +256,14 @@ Config:
                     {
                         DelayAddingDatetimeSecondTimeMs = delayInMs;
                     }
+                }
+
+                // DoubleEnterTogglesDatetime
+                var doubleEnterTogglesDatetime = ConfigValue(iniContent, "DoubleEnterTogglesDatetime");
+                if (!string.IsNullOrWhiteSpace(doubleEnterTogglesDatetime))
+                {
+                    var trimmedAndLower = doubleEnterTogglesDatetime.Trim().ToLower();
+                    DoubleEnterTogglesDatetime = "true" == trimmedAndLower || "1" == trimmedAndLower;
                 }
                 return iniContent;
             }
