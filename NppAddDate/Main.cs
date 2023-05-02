@@ -29,6 +29,7 @@ namespace Kbg.NppPluginNET
         static int DelayAddingDatetimeSecondTimeMs = 8 * 60 * 1000; // 8 min default
 
         static bool DoubleEnterTogglesDatetime = true;
+        static int DoubleEnterDelayInMs = 500;
         //static DateTime prevDate;
         static Dictionary<string, DateTime> prevDates = new Dictionary<string, DateTime>();
         static readonly Dictionary<string, DateTime> datetimeInsertedPerFile = new Dictionary<string, DateTime>();
@@ -122,7 +123,7 @@ namespace Kbg.NppPluginNET
                 {
                     var diff = now - AddDateTimeKeyPressed;
                     AddDateTimeKeyPressed = now;
-                    if (diff < TimeSpan.FromMilliseconds(500))
+                    if (diff < TimeSpan.FromMilliseconds(DoubleEnterDelayInMs))
                     {
                         AddDateTimeKeyPressed = null; // start again
                         return true;
@@ -255,6 +256,16 @@ Config:
                     if (delayInMs > 0)
                     {
                         DelayAddingDatetimeSecondTimeMs = delayInMs;
+                    }
+                }
+                // DoubleEnterDelayInMs
+                var doubleEnterDelayInMs = ConfigValue(iniContent, "DoubleEnterDelayInMs");
+                delayInMs = -1;
+                if (int.TryParse(doubleEnterDelayInMs, out delayInMs))
+                {
+                    if (delayInMs > 0)
+                    {
+                        DoubleEnterDelayInMs = delayInMs;
                     }
                 }
 
