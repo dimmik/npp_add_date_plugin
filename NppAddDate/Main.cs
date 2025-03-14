@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Timers;
 using System.Windows.Forms;
 using Kbg.NppPluginNET.PluginInfrastructure;
 
@@ -17,20 +15,13 @@ namespace Kbg.NppPluginNET
         static string iniFilePath = null;
         static string stateFilePath => $"{iniFilePath}.state";
 
-        static bool AddDateToggledOn = true;
         static string DatetimeFmt = "yyyy.MM.dd HH:mm:ss";
         static string DateDelimiterFmt = "--- yyyy.MM.dd ---";
         static bool AddDateDelimiter = true;
         static string ApplicableExtension = ".wlog";
-        static char ToggleAddDateChar = '~';
         static char AddDateKey = '\n'; // LF
         static bool Enabled = true;
-        static bool DelayAddingDatetimeSecondTime = true;
-        static int DelayAddingDatetimeSecondTimeMs = 8 * 60 * 1000; // 8 min default
 
-        static bool DoubleEnterTogglesDatetime = true;
-        static int DoubleEnterDelayInMs = 500;
-        //static DateTime prevDate;
         static Dictionary<string, DateTime> prevDates = new Dictionary<string, DateTime>();
         static readonly Dictionary<string, DateTime> datetimeInsertedPerFile = new Dictionary<string, DateTime>();
         public static void OnNotification(ScNotification notification)
@@ -45,57 +36,39 @@ namespace Kbg.NppPluginNET
                 {
                     char theChar = (char)notification.Mmodifiers;
                     var nowD = DateTime.Now;
-                    if (DoToggle(theChar)) // toggle adding the date 
-                    {
-                        AddDateToggledOn = !AddDateToggledOn;
-                    }
                     if (theChar == AddDateKey)
                     {
                         if (!datetimeInsertedPerFile.ContainsKey(path)) datetimeInsertedPerFile[path] = DateTime.MinValue;
-
 
                         var textToAdd = "";
 
                         if (AddDateDelimiter && nowD.ToString("yyyy.MM.dd") != prevDates[path].ToString("yyyy.MM.dd")) // another day
                         {
                             var txt = $"{Environment.NewLine}{nowD.ToString(DateDelimiterFmt)}{Environment.NewLine}";
-                            //sci.AddText(txt.Length, txt);
                             textToAdd += txt;
                         }
 
-                        bool addText = true;
-                        if (DelayAddingDatetimeSecondTime || !AddDateToggledOn)
-                        {
-                            var msecsSinceLastDatetimeInserted = (nowD - datetimeInsertedPerFile[path]).TotalMilliseconds;
-                            bool enoughTimePassed = msecsSinceLastDatetimeInserted > DelayAddingDatetimeSecondTimeMs;
-                            addText = enoughTimePassed;
-                        }
                         prevDates[path] = nowD;
                         Task.Run(WriteState); // background
 
-                        if (addText)
+                        string now;
+                        try
                         {
-
-                            string now;
-                            try
-                            {
-                                now = nowD.ToString(DatetimeFmt) + " ";
-                            }
-                            catch
-                            {
-                                now = nowD.ToString() + " ";
-                            }
-                            AddDateToggledOn = true;
-                            //sci.AddText(now.Length, now);
-                            textToAdd += now;
+                            now = nowD.ToString(DatetimeFmt) + " ";
                         }
+                        catch
+                        {
+                            now = nowD.ToString() + " ";
+                        }
+                        textToAdd += now;
+
                         if (!string.IsNullOrWhiteSpace(textToAdd))
                         {
                             var scih = PluginBase.GetCurrentScintilla();
                             ScintillaGateway sci = new ScintillaGateway(scih);
-                            sci.AddText(textToAdd.Length, textToAdd);
+                            var len = Encoding.UTF8.GetBytes(textToAdd).Length;
+                            sci.AddText(len, textToAdd);
                         }
-
                     }
                     bool isControl = char.IsControl(theChar);
                     if (!isControl || (theChar == AddDateKey))
@@ -113,43 +86,6 @@ namespace Kbg.NppPluginNET
             // if (notification.Header.Code == (uint)SciMsg.SCNxxx)
             // { ... }
         }
-        internal static DateTime? AddDateTimeKeyPressed = null;
-        internal static bool DoToggle(char c)
-        {
-            bool t = c == ToggleAddDateChar;
-            if (t) return t;
-            if (!DoubleEnterTogglesDatetime) return t;
-
-            if (c == AddDateKey) // fast double enter - disable add date
-            {
-                DateTime now = DateTime.Now;
-                if (AddDateTimeKeyPressed == null)
-                {
-                    AddDateTimeKeyPressed = now;
-                    return false;
-                } else
-                {
-                    var diff = now - AddDateTimeKeyPressed;
-                    AddDateTimeKeyPressed = now;
-                    if (diff < TimeSpan.FromMilliseconds(DoubleEnterDelayInMs))
-                    {
-                        AddDateTimeKeyPressed = null; // start again
-                        return true;
-                    } else
-                    {
-                        return false;
-                    }
-                }
-            } else
-            {
-                if (!char.IsControl(c))
-                {
-                    AddDateTimeKeyPressed = null; // start again
-                }
-            }
-            return false;
-        }
-
         internal static void CommandMenuInit()
         {
             StringBuilder sbIniFilePath = new StringBuilder(Win32.MAX_PATH);
@@ -178,7 +114,6 @@ namespace Kbg.NppPluginNET
         {
             var config = ReadConfig();
             MessageBox.Show($@"On each newline ({(AddDateKey == '\r' ? "CR" : "LF")}) in files with extension {ApplicableExtension} adds a date in format {DatetimeFmt} at the line start
-Char {ToggleAddDateChar} ('{ToggleAddDateChar}') toggles adding date.
 On startup 'add date' is enabled
 Config file: '{Path.GetFullPath(iniFilePath)}'
 Config:
@@ -210,12 +145,7 @@ Config:
                         // nothing
                     }
                 }
-                var toggleC = ConfigValue(iniContent, "ToggleAddDateChar");
-                if (!string.IsNullOrWhiteSpace(toggleC))
-                {
-                    var chars = toggleC.Trim().ToCharArray();
-                    ToggleAddDateChar = chars[0];
-                }
+
                 var enabledS = ConfigValue(iniContent, "Enabled");
                 if (!string.IsNullOrWhiteSpace(enabledS))
                 {
@@ -251,39 +181,7 @@ Config:
                         // nothing
                     }
                 }
-                var delayAddingDatetimeSecondTime = ConfigValue(iniContent, "DelayAddingDatetimeSecondTime");
-                if (!string.IsNullOrWhiteSpace(delayAddingDatetimeSecondTime))
-                {
-                    var trimmedAndLower = delayAddingDatetimeSecondTime.Trim().ToLower();
-                    DelayAddingDatetimeSecondTime = "true" == trimmedAndLower || "1" == trimmedAndLower;
-                }
-                var delayAddingDatetimeSecondTimeMs = ConfigValue(iniContent, "DelayAddingDatetimeSecondTimeMs");
-                int delayInMs = -1;
-                if (int.TryParse(delayAddingDatetimeSecondTimeMs, out delayInMs))
-                {
-                    if (delayInMs > 0)
-                    {
-                        DelayAddingDatetimeSecondTimeMs = delayInMs;
-                    }
-                }
-                // DoubleEnterDelayInMs
-                var doubleEnterDelayInMs = ConfigValue(iniContent, "DoubleEnterDelayInMs");
-                delayInMs = -1;
-                if (int.TryParse(doubleEnterDelayInMs, out delayInMs))
-                {
-                    if (delayInMs > 0)
-                    {
-                        DoubleEnterDelayInMs = delayInMs;
-                    }
-                }
 
-                // DoubleEnterTogglesDatetime
-                var doubleEnterTogglesDatetime = ConfigValue(iniContent, "DoubleEnterTogglesDatetime");
-                if (!string.IsNullOrWhiteSpace(doubleEnterTogglesDatetime))
-                {
-                    var trimmedAndLower = doubleEnterTogglesDatetime.Trim().ToLower();
-                    DoubleEnterTogglesDatetime = "true" == trimmedAndLower || "1" == trimmedAndLower;
-                }
                 return iniContent;
             }
             catch
