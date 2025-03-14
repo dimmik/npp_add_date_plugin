@@ -54,13 +54,13 @@ namespace Kbg.NppPluginNET
                         if (!datetimeInsertedPerFile.ContainsKey(path)) datetimeInsertedPerFile[path] = DateTime.MinValue;
 
 
-                        var scih = PluginBase.GetCurrentScintilla();
-                        ScintillaGateway sci = new ScintillaGateway(scih);
+                        var textToAdd = "";
 
                         if (AddDateDelimiter && nowD.ToString("yyyy.MM.dd") != prevDates[path].ToString("yyyy.MM.dd")) // another day
                         {
                             var txt = $"{Environment.NewLine}{nowD.ToString(DateDelimiterFmt)}{Environment.NewLine}";
-                            sci.AddText(txt.Length, txt);
+                            //sci.AddText(txt.Length, txt);
+                            textToAdd += txt;
                         }
 
                         bool addText = true;
@@ -86,8 +86,16 @@ namespace Kbg.NppPluginNET
                                 now = nowD.ToString() + " ";
                             }
                             AddDateToggledOn = true;
-                            sci.AddText(now.Length, now);
+                            //sci.AddText(now.Length, now);
+                            textToAdd += now;
                         }
+                        if (!string.IsNullOrWhiteSpace(textToAdd))
+                        {
+                            var scih = PluginBase.GetCurrentScintilla();
+                            ScintillaGateway sci = new ScintillaGateway(scih);
+                            sci.AddText(textToAdd.Length, textToAdd);
+                        }
+
                     }
                     bool isControl = char.IsControl(theChar);
                     if (!isControl || (theChar == AddDateKey))

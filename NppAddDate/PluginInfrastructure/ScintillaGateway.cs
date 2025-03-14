@@ -87,9 +87,11 @@ namespace Kbg.NppPluginNET.PluginInfrastructure
         /// <summary>Add text to the document at current position. (Scintilla feature 2001)</summary>
         public unsafe void AddText(int length, string text)
         {
-            fixed (byte* textPtr = Encoding.UTF8.GetBytes(text))
+            byte[] bytes = Encoding.UTF8.GetBytes(text);
+            int len = bytes.Length;
+            fixed (byte* textPtr = bytes)
             {
-                IntPtr res = Win32.SendMessage(scintilla, SciMsg.SCI_ADDTEXT, length, (IntPtr) textPtr);
+                IntPtr res = Win32.SendMessage(scintilla, SciMsg.SCI_ADDTEXT, len, (IntPtr) textPtr);
             }
         }
 
