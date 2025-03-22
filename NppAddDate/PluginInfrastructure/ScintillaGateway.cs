@@ -88,7 +88,7 @@ namespace Kbg.NppPluginNET.PluginInfrastructure
         public unsafe void AddText(int length, string text)
         {
             byte[] bytes = Encoding.UTF8.GetBytes(text);
-            int len = bytes.Length;
+            int len = length > 0 ? length : bytes.Length;
             fixed (byte* textPtr = bytes)
             {
                 IntPtr res = Win32.SendMessage(scintilla, SciMsg.SCI_ADDTEXT, len, (IntPtr) textPtr);

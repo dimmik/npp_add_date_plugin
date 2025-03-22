@@ -66,8 +66,7 @@ namespace Kbg.NppPluginNET
                         {
                             var scih = PluginBase.GetCurrentScintilla();
                             ScintillaGateway sci = new ScintillaGateway(scih);
-                            var len = Encoding.UTF8.GetBytes(textToAdd).Length;
-                            sci.AddText(len, textToAdd);
+                            sci.AddText(-1, textToAdd);
                         }
                     }
                     bool isControl = char.IsControl(theChar);
